@@ -1,4 +1,5 @@
 class Receta {
+  final int id;
   final String nombre;
   final List<String> ingredientes;
   final List<String> instrucciones;
@@ -12,6 +13,7 @@ class Receta {
   final String cocina;
 
   Receta({
+    required this.id,
     required this.nombre,
     required this.ingredientes,
     required this.instrucciones,
@@ -27,6 +29,7 @@ class Receta {
 
   factory Receta.fromJson(Map<String, dynamic> json) {
     return Receta(
+      id: (json['id'] as num).toInt(),
       nombre: json['name'] ?? '',
       ingredientes: List<String>.from(json['ingredients'] ?? []),
       instrucciones: List<String>.from(json['instructions'] ?? []),

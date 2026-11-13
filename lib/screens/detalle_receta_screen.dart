@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:recetasapp/models/receta.dart';
+import 'package:recetasapp/models/resena.dart';
+import 'package:recetasapp/services/resenas_db.dart';
 
 class DetalleRecetaScreen extends StatefulWidget {
   final Receta receta;
@@ -11,7 +13,13 @@ class DetalleRecetaScreen extends StatefulWidget {
 }
 
 class _DetalleRecetaScreenState extends State<DetalleRecetaScreen> {
-  final List<_RecipeReview> _reviews = [];
+  late Future<List<Resena>> _reviewsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reviewsFuture = ResenasDb.instancia.obtenerPorReceta(widget.receta.id);
+  }
 
   Future<void> _writeReview() async {
     final review = await showDialog<_RecipeReview>(
@@ -20,7 +28,29 @@ class _DetalleRecetaScreenState extends State<DetalleRecetaScreen> {
     );
 
     if (review == null || !mounted) return;
-    setState(() => _reviews.insert(0, review));
+
+    try {
+      await ResenasDb.instancia.insertarResena(
+        Resena(
+          recetaId: widget.receta.id,
+          autor: review.author,
+          calificacion: review.rating,
+          comentario: review.comment,
+          fechaCreacion: DateTime.now(),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _reviewsFuture = ResenasDb.instancia.obtenerPorReceta(widget.receta.id);
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Reseña guardada.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar la reseña: $error')),
+      );
+    }
   }
 
   @override
@@ -107,7 +137,7 @@ class _DetalleRecetaScreenState extends State<DetalleRecetaScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Reseñas (${_reviews.length})',
+                'Reseñas',
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -120,51 +150,76 @@ class _DetalleRecetaScreenState extends State<DetalleRecetaScreen> {
               ),
             ],
           ),
-          if (_reviews.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'Aún no hay reseñas. ¡Sé la primera persona en compartir tu opinión!',
-              ),
-            )
-          else
-            ..._reviews.map(
-              (review) => Card(
-                margin: const EdgeInsets.only(top: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.person_outline),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Text(
-                              'Tu reseña',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          ...List.generate(
-                            5,
-                            (index) => Icon(
-                              index < review.rating
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              size: 18,
-                              color: Colors.amber,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(review.comment),
-                    ],
+          FutureBuilder<List<Resena>>(
+            future: _reviewsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return Text(
+                  'No se pudieron cargar las reseñas: ${snapshot.error}',
+                );
+              }
+
+              final reviews = snapshot.data ?? const <Resena>[];
+              if (reviews.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Aún no hay reseñas. ¡Sé la primera persona en compartir tu opinión!',
                   ),
-                ),
-              ),
-            ),
+                );
+              }
+
+              return Column(
+                children: reviews
+                    .map(
+                      (review) => Card(
+                        margin: const EdgeInsets.only(top: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.person_outline),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      review.autor,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  ...List.generate(
+                                    5,
+                                    (index) => Icon(
+                                      index < review.calificacion
+                                          ? Icons.star
+                                          : Icons.star_border,
+                                      size: 18,
+                                      color: Colors.amber,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(review.comentario),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -172,8 +227,13 @@ class _DetalleRecetaScreenState extends State<DetalleRecetaScreen> {
 }
 
 class _RecipeReview {
-  const _RecipeReview({required this.rating, required this.comment});
+  const _RecipeReview({
+    required this.author,
+    required this.rating,
+    required this.comment,
+  });
 
+  final String author;
   final int rating;
   final String comment;
 }
@@ -187,11 +247,13 @@ class _RecipeReviewDialog extends StatefulWidget {
 
 class _RecipeReviewDialogState extends State<_RecipeReviewDialog> {
   final _formKey = GlobalKey<FormState>();
+  final _authorController = TextEditingController();
   final _commentController = TextEditingController();
   int _rating = 0;
 
   @override
   void dispose() {
+    _authorController.dispose();
     _commentController.dispose();
     super.dispose();
   }
@@ -200,7 +262,11 @@ class _RecipeReviewDialogState extends State<_RecipeReviewDialog> {
     if (_rating == 0 || !_formKey.currentState!.validate()) return;
 
     Navigator.of(context).pop(
-      _RecipeReview(rating: _rating, comment: _commentController.text.trim()),
+      _RecipeReview(
+        author: _authorController.text.trim(),
+        rating: _rating,
+        comment: _commentController.text.trim(),
+      ),
     );
   }
 
@@ -231,6 +297,22 @@ class _RecipeReviewDialogState extends State<_RecipeReviewDialog> {
                   ),
                 ),
               ),
+            ),
+            TextFormField(
+              controller: _authorController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre del autor',
+                hintText: '¿Quién escribe esta reseña?',
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.words,
+              maxLength: 50,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Escribe tu nombre para continuar';
+                }
+                return null;
+              },
             ),
             TextFormField(
               controller: _commentController,
