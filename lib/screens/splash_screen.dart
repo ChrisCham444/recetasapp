@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:recetasapp/screens/home_screen.dart';
 
@@ -33,7 +34,11 @@ class _SplashScreenState extends State<SplashScreen> {
             const SizedBox(height: 16),
             const Text(
               'Recetas App',
-              style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
             const Text(

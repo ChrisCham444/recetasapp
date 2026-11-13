@@ -45,9 +45,9 @@ class _HomeScreenState extends State<HomeScreen> {
               return RecetaCard(
                 receta: recetas[index],
                 onTap: () async {
-                  final bool? esFavorita = await Navigator.push<bool?>(
+                  await Navigator.push<void>(
                     context,
-                    MaterialPageRoute(
+                    MaterialPageRoute<void>(
                       builder: (context) =>
                           DetalleRecetaScreen(receta: recetas[index]),
                     ),
